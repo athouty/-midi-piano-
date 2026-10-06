@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Web 全音域電子琴 (協作平台版)</title>
+  <title>Web 全音域電子琴 (真實樂器音色庫版)</title>
+  <!-- 引入開源真實樂器 Soundfont 播放器庫 -->
+  <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
   <style>
     :root {
       --bg-color: #10121A;
@@ -136,7 +138,7 @@
 
     .display-panel span { color: var(--accent-color); font-weight: bold; }
 
-    /* 琴鍵滾動區：適中高度並水平置中 */
+    /* 琴鍵滾動區 */
     .keyboard-wrapper {
       flex: 1;
       width: 100%;
@@ -254,10 +256,10 @@
     <button id="start-btn" class="start-btn">🎵 點擊啟動聲音與 MIDI 連線</button>
 
     <div class="header">
-      <div class="title">⌨️ Web 全音域電子琴</div>
+      <div class="title">🎹 Web 琴鍵音樂教室</div>
       <div class="status-badge">
         <div id="status-dot" class="status-dot"></div>
-        <span id="status-text">點擊上方按鈕啟用 MIDI / 音訊</span>
+        <span id="status-text">點擊上方按鈕載入音色庫與啟用 MIDI</span>
       </div>
     </div>
 
@@ -267,6 +269,28 @@
         <label for="midi-select">🎹 連接 MIDI 裝置</label>
         <select id="midi-select">
           <option value="">-- 尚未搜尋裝置 --</option>
+        </select>
+      </div>
+
+      <!-- 真實音色庫選擇 -->
+      <div class="control-group">
+        <label for="instrument-select">🎵 演奏音色</label>
+        <select id="instrument-select">
+          <optgroup label="真實樂器採樣 (Soundfont)">
+            <option value="acoustic_grand_piano" selected>古典平台鋼琴 (Grand Piano)</option>
+            <option value="bright_acoustic_piano">明亮鋼琴 (Bright Piano)</option>
+            <option value="electric_piano_1">經典電鋼琴 (Electric Piano)</option>
+            <option value="glockenspiel">鐵琴 (Glockenspiel)</option>
+            <option value="church_organ">教堂管風琴 (Church Organ)</option>
+            <option value="acoustic_guitar_nylon">古典尼龍吉他 (Guitar)</option>
+            <option value="vibraphone">顫音琴 (Vibraphone)</option>
+          </optgroup>
+          <optgroup label="類比合成器波形">
+            <option value="synth_sawtooth">合成器 - 鋸齒波 (Sawtooth)</option>
+            <option value="synth_sine">合成器 - 正弦波 (Sine)</option>
+            <option value="synth_square">合成器 - 方波 (Square)</option>
+            <option value="synth_triangle">合成器 - 三角波 (Triangle)</option>
+          </optgroup>
         </select>
       </div>
 
@@ -282,18 +306,8 @@
       </div>
 
       <div class="control-group">
-        <label for="waveform">音色波形</label>
-        <select id="waveform">
-          <option value="sine">正弦波 (Sine)</option>
-          <option value="square">方波 (Square)</option>
-          <option value="sawtooth" selected>鋸齒波 (Sawtooth)</option>
-          <option value="triangle">三角波 (Triangle)</option>
-        </select>
-      </div>
-
-      <div class="control-group">
         <label for="volume">主音量</label>
-        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5">
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7">
       </div>
 
       <div class="control-group">
@@ -311,6 +325,7 @@
       <div>音符：<span id="display-note">--</span></div>
       <div>MIDI 碼：<span id="display-number">--</span></div>
       <div>訊號來源：<span id="display-source">--</span></div>
+      <div>音色狀態：<span id="display-soundfont">準備就緒</span></div>
     </div>
 
     <!-- 鋼琴鍵盤區域 -->
@@ -325,7 +340,10 @@
 
   <script>
     let audioCtx = null;
-    let activeOscillators = {};
+    let masterGain = null;
+    let currentInstrument = null; // 當前加載的 Soundfont 樂器實例
+    let activeSoundfontNotes = {}; // 追蹤正在發聲的真實樂器節點
+    let activeOscillators = {};    // 追蹤合成器發聲節點
     let midiAccess = null;
     let selectedMidiId = 'ALL';
 
@@ -344,9 +362,10 @@
     const displayNote = document.getElementById('display-note');
     const displayNumber = document.getElementById('display-number');
     const displaySource = document.getElementById('display-source');
+    const displaySoundfont = document.getElementById('display-soundfont');
     const midiSelect = document.getElementById('midi-select');
+    const instrumentSelect = document.getElementById('instrument-select');
     const keyRangeSelect = document.getElementById('key-range');
-    const waveformSelect = document.getElementById('waveform');
     const volumeSlider = document.getElementById('volume');
     const octaveSelect = document.getElementById('octave');
     const pianoContainer = document.getElementById('piano');
@@ -355,10 +374,18 @@
       return 440 * Math.pow(2, (midi - 69) / 12);
     }
 
-    function initAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
+    async function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime);
+        masterGain.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
       startBtn.style.display = 'none';
+
+      // 載入初始音色
+      loadSelectedInstrument();
     }
 
     startBtn.addEventListener('click', () => {
@@ -366,28 +393,86 @@
       tryInitMIDI();
     });
 
-    function noteOn(midiNote, source = '') {
+    volumeSlider.addEventListener('input', (e) => {
+      if (masterGain && audioCtx) {
+        masterGain.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
+      }
+    });
+
+    // 載入指定的 Soundfont 真實樂器
+    async function loadSelectedInstrument() {
+      const selected = instrumentSelect.value;
+      if (selected.startsWith('synth_')) {
+        currentInstrument = null;
+        displaySoundfont.textContent = "合成器模式";
+        return;
+      }
+
+      displaySoundfont.textContent = "載入音色中...";
+      try {
+        currentInstrument = await Soundfont.instrument(audioCtx, selected, {
+          destination: masterGain,
+          soundfont: 'MusyngKite' // 採用音質更細膩的 MusyngKite 音色包
+        });
+        displaySoundfont.textContent = "真實音色已加載";
+      } catch (err) {
+        console.warn("無法取得高品質音色庫，切換回備用庫:", err);
+        try {
+          currentInstrument = await Soundfont.instrument(audioCtx, selected, {
+            destination: masterGain
+          });
+          displaySoundfont.textContent = "真實音色已加載 (標準)";
+        } catch (e) {
+          currentInstrument = null;
+          displaySoundfont.textContent = "載入失敗 (使用合成器)";
+        }
+      }
+    }
+
+    instrumentSelect.addEventListener('change', () => {
+      if (audioCtx) loadSelectedInstrument();
+    });
+
+    function noteOn(midiNote, source = '', velocity = 100) {
       if (!audioCtx) initAudio();
 
-      const freq = midiToFrequency(midiNote);
-      if (activeOscillators[midiNote]) noteOff(midiNote);
+      const normalizedGain = (velocity / 127) * parseFloat(volumeSlider.value);
 
-      const osc = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
+      // 1. 若為真實 Soundfont 樂器
+      if (currentInstrument) {
+        if (activeSoundfontNotes[midiNote]) {
+          activeSoundfontNotes[midiNote].stop();
+        }
+        // 播放真實採樣音符
+        const noteNode = currentInstrument.play(midiNote, audioCtx.currentTime, {
+          gain: normalizedGain,
+          decay: 2.5
+        });
+        activeSoundfontNotes[midiNote] = noteNode;
+      } 
+      // 2. 若為類比合成器波形
+      else {
+        const oscType = instrumentSelect.value.replace('synth_', '');
+        const freq = midiToFrequency(midiNote);
+        if (activeOscillators[midiNote]) noteOff(midiNote);
 
-      osc.type = waveformSelect.value;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
 
-      const vol = parseFloat(volumeSlider.value);
-      gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(Math.max(vol, 0.001), audioCtx.currentTime + 0.02);
+        osc.type = oscType;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 
-      osc.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      osc.start();
+        gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(Math.max(normalizedGain, 0.001), audioCtx.currentTime + 0.02);
 
-      activeOscillators[midiNote] = { osc, gainNode };
+        osc.connect(gainNode);
+        gainNode.connect(masterGain);
+        osc.start();
 
+        activeOscillators[midiNote] = { osc, gainNode };
+      }
+
+      // 更新介面狀態
       const noteName = noteNames[midiNote % 12] + (Math.floor(midiNote / 12) - 1);
       displayNote.textContent = noteName;
       displayNumber.textContent = midiNote;
@@ -401,11 +486,22 @@
     }
 
     function noteOff(midiNote) {
+      // 停止 Soundfont 音色
+      if (activeSoundfontNotes[midiNote]) {
+        try {
+          activeSoundfontNotes[midiNote].stop(audioCtx.currentTime + 0.05);
+        } catch(e) {}
+        delete activeSoundfontNotes[midiNote];
+      }
+
+      // 停止合成器音色
       if (activeOscillators[midiNote]) {
         const { osc, gainNode } = activeOscillators[midiNote];
         gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.08);
-        setTimeout(() => { osc.stop(); osc.disconnect(); }, 90);
+        setTimeout(() => { 
+          try { osc.stop(); osc.disconnect(); } catch(e) {}
+        }, 90);
         delete activeOscillators[midiNote];
       }
 
@@ -413,6 +509,7 @@
       if (keyEl) keyEl.classList.remove('active');
     }
 
+    // 電腦鍵盤監聽
     const pressedKeys = new Set();
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
@@ -433,6 +530,7 @@
       }
     });
 
+    // MIDI API 初始化
     async function tryInitMIDI() {
       if (!navigator.requestMIDIAccess) {
         statusText.textContent = "瀏覽器不支援 Web MIDI API";
@@ -520,7 +618,7 @@
       const deviceName = e.target ? e.target.name : 'USB MIDI';
 
       if (command === 9 && velocity > 0) {
-        noteOn(note, deviceName);
+        noteOn(note, deviceName, velocity);
       } else if (command === 8 || (command === 9 && velocity === 0)) {
         noteOff(note);
       }
@@ -531,6 +629,7 @@
       bindMidiListeners();
     });
 
+    // 琴鍵渲染
     function renderKeyboard() {
       pianoContainer.innerHTML = '';
       const range = keyRangeSelect.value;
@@ -560,7 +659,7 @@
 
         key.addEventListener('pointerdown', (e) => {
           e.preventDefault();
-          noteOn(i, 'Click/Touch');
+          noteOn(i, 'Click/Touch', 100);
         });
         key.addEventListener('pointerup', (e) => {
           e.preventDefault();
