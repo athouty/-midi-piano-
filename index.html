@@ -32,15 +32,14 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
     }
 
-    /* 鋪滿協作平台容器 */
     .synth-container {
       width: 100vw;
       height: 100vh;
       display: flex;
       flex-direction: column;
       background: var(--panel-bg);
-      padding: 12px 16px;
-      overflow-y: auto;
+      padding: 14px 18px;
+      box-sizing: border-box;
     }
 
     .header {
@@ -62,7 +61,7 @@
 
     .status-badge {
       font-size: 0.78rem;
-      padding: 5px 10px;
+      padding: 5px 12px;
       border-radius: 20px;
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -86,11 +85,11 @@
 
     .controls-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
       margin-bottom: 8px;
       background: rgba(0, 0, 0, 0.3);
-      padding: 10px;
+      padding: 10px 12px;
       border-radius: 8px;
       flex-shrink: 0;
     }
@@ -98,7 +97,7 @@
     .control-group {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 4px;
     }
 
     .control-group label {
@@ -116,7 +115,7 @@
       padding: 5px 8px;
       border-radius: 6px;
       outline: none;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
     }
 
     select:focus { border-color: var(--accent-color); }
@@ -124,33 +123,36 @@
     .display-panel {
       text-align: center;
       background: #0D0E15;
-      padding: 8px;
+      padding: 8px 12px;
       border-radius: 6px;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
       border: 1px solid rgba(0, 229, 255, 0.2);
       display: flex;
       justify-content: space-around;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 0.82rem;
+      font-size: 0.85rem;
       flex-shrink: 0;
     }
 
     .display-panel span { color: var(--accent-color); font-weight: bold; }
 
-    /* 琴鍵滾動區塊 */
+    /* 琴鍵滾動區：適中高度並水平置中 */
     .keyboard-wrapper {
       flex: 1;
-      min-height: 180px;
       width: 100%;
+      min-height: 220px;
+      max-height: 270px;
       overflow-x: auto;
       overflow-y: hidden;
-      border-radius: 8px;
+      border-radius: 10px;
       background: #0A0B10;
       scrollbar-width: thin;
       scrollbar-color: var(--accent-color) #181B26;
       display: flex;
-      align-items: stretch;
-      padding: 10px;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 8px 14px;
+      margin: auto 0;
     }
 
     .keyboard-wrapper::-webkit-scrollbar { height: 8px; }
@@ -162,8 +164,8 @@
     .piano {
       display: inline-flex;
       position: relative;
-      height: 100%;
-      min-height: 150px;
+      height: 210px;
+      min-width: max-content;
       margin: 0 auto;
       padding: 0 10px;
     }
@@ -171,27 +173,30 @@
     .key {
       position: relative;
       cursor: pointer;
-      border-radius: 0 0 5px 5px;
+      border-radius: 0 0 6px 6px;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
       align-items: center;
       padding-bottom: 8px;
-      font-size: 0.7rem;
+      font-size: 0.72rem;
       font-weight: bold;
       touch-action: none;
+      flex-shrink: 0;
     }
 
     .key .key-label { font-size: 0.65rem; opacity: 0.75; }
     .key .note-label { font-size: 0.6rem; margin-top: 2px; opacity: 0.55; }
 
     .key.white {
-      width: 38px;
-      height: 100%;
+      width: 44px;
+      height: 200px;
       background: var(--key-white);
       color: #222;
-      border: 1px solid #AAA;
+      border: 1px solid #BBB;
+      border-top: none;
       z-index: 1;
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12);
     }
 
     .key.white.active {
@@ -202,14 +207,15 @@
     }
 
     .key.black {
-      width: 24px;
-      height: 60%;
+      width: 26px;
+      height: 125px;
       background: var(--key-black);
       color: #CCC;
-      margin-left: -12px;
-      margin-right: -12px;
+      margin-left: -13px;
+      margin-right: -13px;
       z-index: 2;
       border-radius: 0 0 4px 4px;
+      box-shadow: 2px 3px 5px rgba(0, 0, 0, 0.5);
     }
 
     .key.black.active {
@@ -236,7 +242,7 @@
     .hints {
       font-size: 0.72rem;
       color: #7A899B;
-      margin-top: 6px;
+      margin-top: 8px;
       text-align: center;
       flex-shrink: 0;
     }
@@ -407,7 +413,6 @@
       if (keyEl) keyEl.classList.remove('active');
     }
 
-    // 鍵盤監聽
     const pressedKeys = new Set();
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
@@ -428,7 +433,6 @@
       }
     });
 
-    // 啟動 MIDI 連線 (加入 iframe 權限偵測)
     async function tryInitMIDI() {
       if (!navigator.requestMIDIAccess) {
         statusText.textContent = "瀏覽器不支援 Web MIDI API";
@@ -436,13 +440,12 @@
       }
 
       try {
-        // 先嘗試標準無 sysex 請求，降低權限阻擋機率
         midiAccess = await navigator.requestMIDIAccess({ sysex: false });
         updateMidiDeviceList();
         midiAccess.onstatechange = () => updateMidiDeviceList();
       } catch (err) {
         if (err.name === 'SecurityError') {
-          statusText.textContent = "MIDI 權限遭 iframe 限制 (請加上 allow='midi')";
+          statusText.textContent = "MIDI 權限遭限制 (需 allow='midi')";
         } else {
           statusText.textContent = "MIDI 連線失敗：" + err.message;
         }
@@ -555,7 +558,6 @@
         const noteLabel = `<div class="note-label">${noteNames[i % 12]}</div>`;
         key.innerHTML = `${keyLabel}${noteLabel}`;
 
-        // 滑鼠與觸控事件
         key.addEventListener('pointerdown', (e) => {
           e.preventDefault();
           noteOn(i, 'Click/Touch');
