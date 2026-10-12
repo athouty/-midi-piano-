@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Web 全音域電子琴 (真實樂器音色庫版)</title>
-  <!-- 引入開源真實樂器 Soundfont 播放器庫 -->
+  <title>Web 全音域電子琴 (真實樂器高音量優化版)</title>
   <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
   <style>
     :root {
@@ -138,7 +137,6 @@
 
     .display-panel span { color: var(--accent-color); font-weight: bold; }
 
-    /* 琴鍵滾動區 */
     .keyboard-wrapper {
       flex: 1;
       width: 100%;
@@ -272,7 +270,6 @@
         </select>
       </div>
 
-      <!-- 真實音色庫選擇 -->
       <div class="control-group">
         <label for="instrument-select">🎵 演奏音色</label>
         <select id="instrument-select">
@@ -307,7 +304,7 @@
 
       <div class="control-group">
         <label for="volume">主音量</label>
-        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.7">
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.85">
       </div>
 
       <div class="control-group">
@@ -341,9 +338,11 @@
   <script>
     let audioCtx = null;
     let masterGain = null;
-    let currentInstrument = null; // 當前加載的 Soundfont 樂器實例
-    let activeSoundfontNotes = {}; // 追蹤正在發聲的真實樂器節點
-    let activeOscillators = {};    // 追蹤合成器發聲節點
+    let soundfontGain = null; // 專門給真實音色庫的前級增益（補償採樣衰減）
+    let compressor = null;    // 動態壓縮器，防止大音量或和弦爆音破音
+    let currentInstrument = null;
+    let activeSoundfontNotes = {};
+    let activeOscillators = {};
     let midiAccess = null;
     let selectedMidiId = 'ALL';
 
@@ -377,14 +376,29 @@
     async function initAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // 建立音訊鏈：[音源] -> [soundfontGain 補償] -> [compressor 壓限] -> [masterGain 主音量] -> [揚聲器]
+        compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+        compressor.knee.setValueAtTime(20, audioCtx.currentTime);
+        compressor.ratio.setValueAtTime(6, audioCtx.currentTime);
+        compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        compressor.release.setValueAtTime(0.2, audioCtx.currentTime);
+
         masterGain = audioCtx.createGain();
         masterGain.gain.setValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime);
+
+        // 前級增益放大 3.2 倍，補足 Soundfont 採樣原生音量不足
+        soundfontGain = audioCtx.createGain();
+        soundfontGain.gain.setValueAtTime(3.2, audioCtx.currentTime);
+
+        soundfontGain.connect(compressor);
+        compressor.connect(masterGain);
         masterGain.connect(audioCtx.destination);
       }
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       startBtn.style.display = 'none';
 
-      // 載入初始音色
       loadSelectedInstrument();
     }
 
@@ -399,7 +413,6 @@
       }
     });
 
-    // 載入指定的 Soundfont 真實樂器
     async function loadSelectedInstrument() {
       const selected = instrumentSelect.value;
       if (selected.startsWith('synth_')) {
@@ -411,20 +424,19 @@
       displaySoundfont.textContent = "載入音色中...";
       try {
         currentInstrument = await Soundfont.instrument(audioCtx, selected, {
-          destination: masterGain,
-          soundfont: 'MusyngKite' // 採用音質更細膩的 MusyngKite 音色包
+          destination: soundfontGain, // 接到前級增益器
+          soundfont: 'MusyngKite'
         });
-        displaySoundfont.textContent = "真實音色已加載";
+        displaySoundfont.textContent = "高音質音色已就緒";
       } catch (err) {
-        console.warn("無法取得高品質音色庫，切換回備用庫:", err);
         try {
           currentInstrument = await Soundfont.instrument(audioCtx, selected, {
-            destination: masterGain
+            destination: soundfontGain
           });
-          displaySoundfont.textContent = "真實音色已加載 (標準)";
+          displaySoundfont.textContent = "標準音色已就緒";
         } catch (e) {
           currentInstrument = null;
-          displaySoundfont.textContent = "載入失敗 (使用合成器)";
+          displaySoundfont.textContent = "音色載入失敗 (使用合成器)";
         }
       }
     }
@@ -436,21 +448,23 @@
     function noteOn(midiNote, source = '', velocity = 100) {
       if (!audioCtx) initAudio();
 
-      const normalizedGain = (velocity / 127) * parseFloat(volumeSlider.value);
+      // 力度響應曲線 (0 ~ 1.5 之間，保留觸鍵表現力)
+      const velFactor = Math.pow(velocity / 127, 0.75) * 1.5;
 
-      // 1. 若為真實 Soundfont 樂器
+      // 1. 真實 Soundfont 樂器演奏
       if (currentInstrument) {
         if (activeSoundfontNotes[midiNote]) {
-          activeSoundfontNotes[midiNote].stop();
+          try { activeSoundfontNotes[midiNote].stop(); } catch(e) {}
         }
-        // 播放真實採樣音符
+        
+        // 增益由 soundfontGain + masterGain 統一控制，此處只傳入力度係數
         const noteNode = currentInstrument.play(midiNote, audioCtx.currentTime, {
-          gain: normalizedGain,
-          decay: 2.5
+          gain: velFactor,
+          decay: 3.0
         });
         activeSoundfontNotes[midiNote] = noteNode;
       } 
-      // 2. 若為類比合成器波形
+      // 2. 類比合成器波形演奏
       else {
         const oscType = instrumentSelect.value.replace('synth_', '');
         const freq = midiToFrequency(midiNote);
@@ -462,17 +476,18 @@
         osc.type = oscType;
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
 
+        const targetGain = Math.min(velFactor * 0.45, 0.8);
         gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(Math.max(normalizedGain, 0.001), audioCtx.currentTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(targetGain, audioCtx.currentTime + 0.02);
 
         osc.connect(gainNode);
-        gainNode.connect(masterGain);
+        gainNode.connect(compressor);
         osc.start();
 
         activeOscillators[midiNote] = { osc, gainNode };
       }
 
-      // 更新介面狀態
+      // 更新介面
       const noteName = noteNames[midiNote % 12] + (Math.floor(midiNote / 12) - 1);
       displayNote.textContent = noteName;
       displayNumber.textContent = midiNote;
@@ -486,15 +501,13 @@
     }
 
     function noteOff(midiNote) {
-      // 停止 Soundfont 音色
       if (activeSoundfontNotes[midiNote]) {
         try {
-          activeSoundfontNotes[midiNote].stop(audioCtx.currentTime + 0.05);
+          activeSoundfontNotes[midiNote].stop(audioCtx.currentTime + 0.08);
         } catch(e) {}
         delete activeSoundfontNotes[midiNote];
       }
 
-      // 停止合成器音色
       if (activeOscillators[midiNote]) {
         const { osc, gainNode } = activeOscillators[midiNote];
         gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
@@ -517,7 +530,7 @@
       if (keyToMidi[key] !== undefined && !pressedKeys.has(key)) {
         pressedKeys.add(key);
         const midiWithOctave = keyToMidi[key] + parseInt(octaveSelect.value);
-        noteOn(midiWithOctave, `鍵盤 [${key.toUpperCase()}]`);
+        noteOn(midiWithOctave, `鍵盤 [${key.toUpperCase()}]`, 110);
       }
     });
 
@@ -530,7 +543,7 @@
       }
     });
 
-    // MIDI API 初始化
+    // MIDI 連線管理
     async function tryInitMIDI() {
       if (!navigator.requestMIDIAccess) {
         statusText.textContent = "瀏覽器不支援 Web MIDI API";
@@ -629,7 +642,7 @@
       bindMidiListeners();
     });
 
-    // 琴鍵渲染
+    // 鍵盤渲染
     function renderKeyboard() {
       pianoContainer.innerHTML = '';
       const range = keyRangeSelect.value;
@@ -659,7 +672,7 @@
 
         key.addEventListener('pointerdown', (e) => {
           e.preventDefault();
-          noteOn(i, 'Click/Touch', 100);
+          noteOn(i, 'Click/Touch', 110);
         });
         key.addEventListener('pointerup', (e) => {
           e.preventDefault();
