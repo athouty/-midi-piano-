@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>色彩音樂聯覺演奏琴 (自然意象想像畫布版)</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌌</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #080a10;
+      --panel-bg: #101422;
+      --text-color: #E2E8F0;
+      --accent-default: #00E5FF;
+      --key-white: #FFFFFF;
+      --key-black: #171A21;
+    }
+
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      user-select: none; 
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    .synth-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel-bg);
+      padding: 10px 16px;
+      box-sizing: border-box;
+      gap: 6px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      gap: 10px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent-default);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 回首頁按鈕 */
+    .home-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: rgba(0, 229, 255, 0.12);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      border-radius: 6px;
+      color: var(--accent-default);
+      text-decoration: none;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .home-btn:hover {
+      background: rgba(0, 229, 255, 0.25);
+      border-color: var(--accent-default);
+      transform: translateY(-1px);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+    }
+
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px; 
+      height: 8px;
+      border-radius: 50%;
+      background-color: #FFB300;
+      transition: background-color 0.3s;
+    }
+
+    .status-dot.connected {
+      background-color: #00FF66;
+      box-shadow: 0 0 8px #00FF66;
+    }
+
+    /* 控制面板 */
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 8px 12px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .control-group label {
+      font-size: 0.68rem;
+      color: #8A99AD;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+      background: #0B0E18;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text-color);
+      padding: 4px 6px;
+      border-radius: 5px;
+      outline: none;
+      font-size: 0.8rem;
+    }
+
+    select:focus { border-color: var(--accent-default); }
+
+    /* 抽象油畫與自然意象畫布區 */
+    .visualizer-wrapper {
+      flex: 1;
+      width: 100%;
+      min-height: 160px;
+      background: #090c16;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9);
+    }
+
+    canvas#visualizer {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* 狀態顯示條 */
+    .display-panel {
+      text-align: center;
+      background: #0B0E18;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      flex-shrink: 0;
+    }
+
+    .color-preview-chip {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      margin-right: 5px;
+      vertical-align: middle;
+      border: 1px solid rgba(255,255,255,0.4);
+      transition: background-color 0.3s;
+    }
+
+    /* 琴鍵滾動區 */
+    .keyboard-wrapper {
+      width: 100%;
+      height: 200px;
+      flex-shrink: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      border-radius: 10px;
+      background: #070910;
+      scrollbar-width: thin;
+      scrollbar-color: var(--accent-default) #101423;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 6px 12px;
+    }
+
+    .keyboard-wrapper::-webkit-scrollbar { height: 8px; }
+    .keyboard-wrapper::-webkit-scrollbar-thumb {
+      background: var(--accent-default);
+      border-radius: 4px;
+    }
+
+    .piano {
+      display: inline-flex;
+      position: relative;
+      height: 185px;
+      min-width: max-content;
+      margin: 0 auto;
+    }
+
+    .key {
+      position: relative;
+      cursor: pointer;
+      border-radius: 0 0 6px 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      padding-bottom: 6px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      touch-action: none;
+      flex-shrink: 0;
+      transition: transform 0.05s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .key .key-label { font-size: 0.62rem; opacity: 0.8; }
+    .key .note-label { font-size: 0.58rem; margin-top: 2px; opacity: 0.6; }
+
+    .key.white {
+      width: 42px;
+      height: 180px;
+      background: var(--key-white);
+      color: #222;
+      border: 1px solid #BBB;
+      border-top: none;
+      z-index: 1;
+      box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    .key.black {
+      width: 25px;
+      height: 115px;
+      background: var(--key-black);
+      color: #CCC;
+      margin-left: -12.5px;
+      margin-right: -12.5px;
+      z-index: 2;
+      border-radius: 0 0 4px 4px;
+      box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    .key.active {
+      transform: translateY(3px) !important;
+      color: #fff !important;
+    }
+
+    .start-btn {
+      width: 100%;
+      padding: 9px;
+      background: linear-gradient(135deg, #1e3c72, #2a5298, #6dd5ed);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-weight: bold;
+      font-size: 0.9rem;
+      cursor: pointer;
+      flex-shrink: 0;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .hints {
+      font-size: 0.7rem;
+      color: #7A899B;
+      text-align: center;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="synth-container">
+    <button id="start-btn" class="start-btn">🌌 點擊啟動色彩音樂視訊與音訊引擎</button>
+
+    <div class="header">
+      <div class="header-left">
+        <a href="https://www.athouty.net/home" target="_top" class="home-btn">🏠 回首頁</a>
+        <div class="title">🌊 意象流動色彩演奏琴</div>
+      </div>
+      <div class="status-badge">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text">點擊上方按鈕載入音色與畫布</span>
+      </div>
+    </div>
+
+    <!-- 控制區 -->
+    <div class="controls-grid">
+      <div class="control-group">
+        <label for="midi-select">🎹 MIDI 設備</label>
+        <select id="midi-select">
+          <option value="">-- 尚未搜尋裝置 --</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="instrument-select">🎵 演奏音色</label>
+        <select id="instrument-select">
+          <optgroup label="真實樂器採樣">
+            <option value="acoustic_grand_piano" selected>古典平台鋼琴</option>
+            <option value="bright_acoustic_piano">明亮鋼琴</option>
+            <option value="electric_piano_1">經典電鋼琴</option>
+            <option value="glockenspiel">高音鐵琴</option>
+            <option value="church_organ">教堂管風琴</option>
+            <option value="acoustic_guitar_nylon">尼龍弦吉他</option>
+            <option value="vibraphone">顫音琴 (Vibraphone)</option>
+          </optgroup>
+          <optgroup label="合成器音色">
+            <option value="synth_sawtooth">合成鋸齒波</option>
+            <option value="synth_sine">合成正弦波</option>
+            <option value="synth_triangle">合成三角波</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="key-range">琴鍵數量</label>
+        <select id="key-range">
+          <option value="25">25 鍵 (C4 - C6)</option>
+          <option value="37" selected>37 鍵 (F3 - F6)</option>
+          <option value="49">49 鍵 (C3 - C7)</option>
+          <option value="61">61 鍵 (C2 - C7)</option>
+          <option value="88">88 鍵 (全音域)</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="volume">主音量</label>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.85">
+      </div>
+
+      <div class="control-group">
+        <label for="octave">鍵盤移調</label>
+        <select id="octave">
+          <option value="-12">-1 八度</option>
+          <option value="0" selected>標準八度</option>
+          <option value="12">+1 八度</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 抽象油畫與意象畫布 -->
+    <div class="visualizer-wrapper">
+      <canvas id="visualizer"></canvas>
+    </div>
+
+    <!-- 狀態顯示 -->
+    <div class="display-panel">
+      <div>當前音符：<span id="display-note">--</span></div>
+      <div>MIDI 碼：<span id="display-number">--</span></div>
+      <div>
+        調性色彩：<span class="color-preview-chip" id="color-chip" style="background:#555;"></span><span id="display-color">--</span>
+      </div>
+      <div>意象流態：<span id="display-flow" style="color:var(--accent-default);">平靜湖水</span></div>
+    </div>
+
+    <!-- 琴鍵區域 -->
+    <div class="keyboard-wrapper" id="kb-wrapper">
+      <div class="piano" id="piano"></div>
+    </div>
+
+    <div class="hints">
+      💡 電腦鍵盤按鍵：<b>[下排] Z X C V B N M</b> (黑鍵 S D G H J) | <b>[上排] Q W E R T Y U</b> (黑鍵 2 3 5 6 7)
+    </div>
+  </div>
+
+  <script>
+    const noteColorMap = [
+      { name: "C",  r: 255, g: 45,  b: 45,  hex: "#FF2D2D", label: "純紅 (C大調: 純粹與力量)" },
+      { name: "C#", r: 160, g: 50,  b: 255, hex: "#A032FF", label: "深紫 (C#大調: 神秘莊嚴)" },
+      { name: "D",  r: 255, g: 215, b: 0,   hex: "#FFD700", label: "耀黃 (D大調: 歡慶與勝利)" },
+      { name: "D#", r: 60,  g: 140, b: 215, hex: "#3C8CD7", label: "冷青 (Eb大調: 沉思幽遠)" },
+      { name: "E",  r: 0,   g: 229, b: 255, hex: "#00E5FF", label: "星藍 (E大調: 澄澈晶瑩)" },
+      { name: "F",  r: 180, g: 35,  b: 35,  hex: "#B42323", label: "絳紅 (F大調: 田園與自然)" },
+      { name: "F#", r: 0,   g: 255, b: 150, hex: "#00FF96", label: "草綠 (F#大調: 空靈生機)" },
+      { name: "G",  r: 255, g: 110, b: 180, hex: "#FF6EB4", label: "橘粉 (G大調: 詩意熱情)" },
+      { name: "G#", r: 65,  g: 115, b: 235, hex: "#4173EB", label: "湛藍 (Ab大調: 夢幻典雅)" },
+      { name: "A",  r: 46,  g: 204, b: 113, hex: "#2ECC71", label: "春綠 (A大調: 愉悅青翠)" },
+      { name: "A#", r: 245, g: 160, b: 20,  hex: "#F5A014", label: "金橙 (Bb大調: 壯麗輝煌)" },
+      { name: "B",  r: 230, g: 238, b: 250, hex: "#E6EEFA", label: "珠白 (B大調: 冷冽自信)" }
+    ];
+
+    let audioCtx = null;
+    let masterGain = null;
+    let soundfontGain = null;
+    let compressor = null;
+    let analyser = null;
+    let currentInstrument = null;
+    let activeSoundfontNotes = {};
+    let activeOscillators = {};
+    let midiAccess = null;
+    let selectedMidiId = 'ALL';
+
+    let activeNotesSet = new Set();
+    let oilBlocks = [];
+    let organicFlows = [];
+
+    let ambientAlpha = 0.40;
+    let targetAmbientAlpha = 0.40;
+    let currentBgColor = { r: 10, g: 15, b: 26 };
+
+    const keyToMidi = {
+      'z': 48, 's': 49, 'x': 50, 'd': 51, 'c': 52, 'v': 53,
+      'g': 54, 'b': 55, 'h': 56, 'n': 57, 'j': 58, 'm': 59,
+      'q': 60, '2': 61, 'w': 62, '3': 63, 'e': 64, 'r': 65,
+      '5': 66, 't': 67, '6': 68, 'y': 69, '7': 70, 'u': 71, 'i': 72
+    };
+
+    const startBtn = document.getElementById('start-btn');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const displayNote = document.getElementById('display-note');
+    const displayNumber = document.getElementById('display-number');
+    const displayColor = document.getElementById('display-color');
+    const displayFlow = document.getElementById('display-flow');
+    const colorChip = document.getElementById('color-chip');
+    const midiSelect = document.getElementById('midi-select');
+    const instrumentSelect = document.getElementById('instrument-select');
+    const keyRangeSelect = document.getElementById('key-range');
+    const volumeSlider = document.getElementById('volume');
+    const octaveSelect = document.getElementById('octave');
+    const pianoContainer = document.getElementById('piano');
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function midiToFrequency(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function getVariedColor(baseColor) {
+      const shift = (Math.random() - 0.5) * 40;
+      return {
+        r: Math.min(255, Math.max(0, Math.round(baseColor.r + shift))),
+        g: Math.min(255, Math.max(0, Math.round(baseColor.g + shift * 0.5))),
+        b: Math.min(255, Math.max(0, Math.round(baseColor.b - shift * 0.5)))
+      };
+    }
+
+    async function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.8;
+
+        compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+        compressor.knee.setValueAtTime(20, audioCtx.currentTime);
+        compressor.ratio.setValueAtTime(6, audioCtx.currentTime);
+
+        masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(parseFloat(volumeSlider.value), audioCtx.currentTime);
+
+        soundfontGain = audioCtx.createGain();
+        soundfontGain.gain.setValueAtTime(3.2, audioCtx.currentTime);
+
+        soundfontGain.connect(compressor);
+        compressor.connect(analyser);
+        analyser.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      startBtn.style.display = 'none';
+
+      resizeCanvas();
+      renderVisualizer();
+      loadSelectedInstrument();
+    }
+
+    startBtn.addEventListener('click', () => {
+      initAudio();
+      tryInitMIDI();
+    });
+
+    volumeSlider.addEventListener('input', (e) => {
+      if (masterGain && audioCtx) {
+        masterGain.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
+      }
+    });
+
+    async function loadSelectedInstrument() {
+      const selected = instrumentSelect.value;
+      if (selected.startsWith('synth_')) {
+        currentInstrument = null;
+        return;
+      }
+      try {
+        currentInstrument = await Soundfont.instrument(audioCtx, selected, {
+          destination: soundfontGain,
+          soundfont: 'MusyngKite'
+        });
+      } catch (err) {
+        currentInstrument = await Soundfont.instrument(audioCtx, selected, {
+          destination: soundfontGain
+        }).catch(() => null);
+      }
+    }
+
+    instrumentSelect.addEventListener('change', () => {
+      if (audioCtx) loadSelectedInstrument();
+    });
+
+    function noteOn(midiNote, source = '', velocity = 100) {
+      if (!audioCtx) initAudio();
+
+      activeNotesSet.add(midiNote);
+      const colorData = noteColorMap[midiNote % 12];
+      const velFactor = Math.pow(velocity / 127, 0.75) * 1.5;
+
+      if (currentInstrument) {
+        if (activeSoundfontNotes[midiNote]) {
+          try { activeSoundfontNotes[midiNote].stop(); } catch(e) {}
+        }
+        activeSoundfontNotes[midiNote] = currentInstrument.play(midiNote, audioCtx.currentTime, {
+          gain: velFactor,
+          decay: 3.0
+        });
+      } else {
+        const oscType = instrumentSelect.value.replace('synth_', '');
+        const freq = midiToFrequency(midiNote);
+        if (activeOscillators[midiNote]) noteOff(midiNote);
+
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = oscType;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+        const targetGain = Math.min(velFactor * 0.45, 0.8);
+        gainNode.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(targetGain, audioCtx.currentTime + 0.02);
+
+        osc.connect(gainNode);
+        gainNode.connect(compressor);
+        osc.start();
+        activeOscillators[midiNote] = { osc, gainNode };
+      }
+
+      const noteName = colorData.name + (Math.floor(midiNote / 12) - 1);
+      displayNote.textContent = noteName;
+      displayNumber.textContent = midiNote;
+      displayColor.textContent = colorData.label;
+      colorChip.style.backgroundColor = colorData.hex;
+
+      targetAmbientAlpha = 0.40 + (Math.min(activeNotesSet.size, 4) / 4) * (0.77 - 0.40);
+
+      const keyEl = document.querySelector(`[data-midi="${midiNote}"]`);
+      if (keyEl) {
+        keyEl.classList.add('active');
+        keyEl.style.backgroundColor = colorData.hex;
+        keyEl.style.boxShadow = `0 0 18px ${colorData.hex}`;
+
+        const rect = keyEl.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const xPos = (rect.left + rect.width / 2) - canvasRect.left;
+        const clampedX = Math.max(40, Math.min(canvas.width - 40, xPos));
+
+        const blockCount = 1 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < blockCount; i++) {
+          oilBlocks.push({
+            x: clampedX + (Math.random() * 80 - 40),
+            y: (canvas.height * 0.5) + (Math.random() * 80 - 40),
+            w: 80 + Math.random() * 120,
+            h: 90 + Math.random() * 130,
+            angle: (Math.random() - 0.5) * 0.15,
+            rotSpeed: (Math.random() - 0.5) * 0.004,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: -0.3 - Math.random() * 0.6,
+            color: getVariedColor(colorData),
+            alpha: 0,
+            targetAlpha: 0.55 + Math.random() * 0.2,
+            fadeIn: true,
+            decay: 0.004 + Math.random() * 0.003
+          });
+        }
+
+        spawnOrganicFlow(clampedX, colorData);
+      }
+    }
+
+    function spawnOrganicFlow(originX, baseColor) {
+      const types = ['ripple', 'river', 'lightning', 'wisp'];
+      const chosen = types[Math.floor(Math.random() * types.length)];
+      const flowColor = getVariedColor(baseColor);
+      const startY = canvas.height * (0.2 + Math.random() * 0.6);
+
+      if (chosen === 'ripple') {
+        displayFlow.textContent = "漣漪微瀾";
+        organicFlows.push({
+          type: 'ripple',
+          x: originX,
+          y: startY,
+          radius: 10,
+          maxRadius: 100 + Math.random() * 140,
+          color: flowColor,
+          alpha: 0,
+          targetAlpha: 0.7,
+          fadeIn: true,
+          lineWidth: 2 + Math.random() * 3,
+          speed: 1.8 + Math.random() * 2.5
+        });
+      } else if (chosen === 'river') {
+        displayFlow.textContent = "光之長河";
+        const points = [];
+        let currX = Math.random() > 0.5 ? 0 : originX - 100;
+        let currY = startY;
+        const totalSegments = 5;
+        for (let i = 0; i <= totalSegments; i++) {
+          points.push({
+            x: currX + (canvas.width / totalSegments) * i + (Math.random() * 40 - 20),
+            y: currY + (Math.random() * 80 - 40)
+          });
+        }
+        organicFlows.push({
+          type: 'river',
+          points: points,
+          color: flowColor,
+          alpha: 0,
+          targetAlpha: 0.65,
+          fadeIn: true,
+          lineWidth: 6 + Math.random() * 12,
+          decay: 0.007
+        });
+      } else if (chosen === 'lightning') {
+        displayFlow.textContent = "星火電芒";
+        const segments = [];
+        let lx = originX;
+        let ly = canvas.height * 0.15;
+        const steps = 7;
+        for (let i = 0; i < steps; i++) {
+          const nextX = lx + (Math.random() * 60 - 30);
+          const nextY = ly + (canvas.height * 0.7 / steps);
+          segments.push({ x1: lx, y1: ly, x2: nextX, y2: nextY });
+          lx = nextX;
+          ly = nextY;
+        }
+        organicFlows.push({
+          type: 'lightning',
+          segments: segments,
+          color: flowColor,
+          alpha: 0,
+          targetAlpha: 0.75,
+          fadeIn: true,
+          decay: 0.015
+        });
+      } else if (chosen === 'wisp') {
+        displayFlow.textContent = "晨曦流雲";
+        organicFlows.push({
+          type: 'wisp',
+          x: originX,
+          y: startY,
+          rx: 60 + Math.random() * 80,
+          ry: 35 + Math.random() * 50,
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: -0.8 - Math.random() * 1.2,
+          color: flowColor,
+          alpha: 0,
+          targetAlpha: 0.5,
+          fadeIn: true,
+          decay: 0.006
+        });
+      }
+    }
+
+    function noteOff(midiNote) {
+      activeNotesSet.delete(midiNote);
+
+      if (activeNotesSet.size === 0) {
+        targetAmbientAlpha = 0.40;
+        displayFlow.textContent = "平靜微光";
+      } else {
+        targetAmbientAlpha = 0.40 + (Math.min(activeNotesSet.size, 4) / 4) * (0.77 - 0.40);
+      }
+
+      if (activeSoundfontNotes[midiNote]) {
+        try { activeSoundfontNotes[midiNote].stop(audioCtx.currentTime + 0.08); } catch(e) {}
+        delete activeSoundfontNotes[midiNote];
+      }
+
+      if (activeOscillators[midiNote]) {
+        const { osc, gainNode } = activeOscillators[midiNote];
+        gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.08);
+        setTimeout(() => { try { osc.stop(); osc.disconnect(); } catch(e) {} }, 90);
+        delete activeOscillators[midiNote];
+      }
+
+      const keyEl = document.querySelector(`[data-midi="${midiNote}"]`);
+      if (keyEl) {
+        keyEl.classList.remove('active');
+        keyEl.style.backgroundColor = '';
+        keyEl.style.boxShadow = '';
+      }
+    }
+
+    function getBlendedColor() {
+      if (activeNotesSet.size === 0) {
+        return { r: 10, g: 25, b: 50 };
+      }
+      let r = 0, g = 0, b = 0;
+      activeNotesSet.forEach(note => {
+        const c = noteColorMap[note % 12];
+        r += c.r;
+        g += c.g;
+        b += c.b;
+      });
+      const count = activeNotesSet.size;
+      return {
+        r: Math.round(r / count),
+        g: Math.round(g / count),
+        b: Math.round(b / count)
+      };
+    }
+
+    function renderVisualizer() {
+      requestAnimationFrame(renderVisualizer);
+      if (!ctx || !analyser) return;
+
+      const width = canvas.width;
+      const height = canvas.height;
+
+      ambientAlpha += (targetAmbientAlpha - ambientAlpha) * 0.06;
+      const targetColor = getBlendedColor();
+      currentBgColor.r += (targetColor.r - currentBgColor.r) * 0.05;
+      currentBgColor.g += (targetColor.g - currentBgColor.g) * 0.05;
+      currentBgColor.b += (targetColor.b - currentBgColor.b) * 0.05;
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#080a12';
+      ctx.fillRect(0, 0, width, height);
+
+      const bgGrad = ctx.createRadialGradient(width / 2, height / 2, 40, width / 2, height / 2, width * 0.7);
+      bgGrad.addColorStop(0, `rgba(${Math.round(currentBgColor.r)}, ${Math.round(currentBgColor.g)}, ${Math.round(currentBgColor.b)}, ${ambientAlpha})`);
+      bgGrad.addColorStop(0.7, `rgba(${Math.round(currentBgColor.r * 0.6)}, ${Math.round(currentBgColor.g * 0.6)}, ${Math.round(currentBgColor.b * 0.6)}, ${ambientAlpha * 0.8})`);
+      bgGrad.addColorStop(1, `rgba(8, 10, 18, 0.95)`);
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.globalCompositeOperation = 'screen';
+
+      for (let i = oilBlocks.length - 1; i >= 0; i--) {
+        const b = oilBlocks[i];
+
+        if (b.fadeIn) {
+          b.alpha += 0.04;
+          if (b.alpha >= b.targetAlpha) b.fadeIn = false;
+        } else {
+          b.alpha -= b.decay;
+        }
+
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        ctx.rotate(b.angle);
+
+        const blockGrad = ctx.createRadialGradient(0, 0, b.w * 0.1, 0, 0, Math.max(b.w, b.h) * 0.65);
+        blockGrad.addColorStop(0, `rgba(${b.color.r}, ${b.color.g}, ${b.color.b}, ${b.alpha})`);
+        blockGrad.addColorStop(0.6, `rgba(${b.color.r}, ${b.color.g}, ${b.color.b}, ${b.alpha * 0.4})`);
+        blockGrad.addColorStop(1, `rgba(${b.color.r}, ${b.color.g}, ${b.color.b}, 0)`);
+
+        ctx.fillStyle = blockGrad;
+        ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+        ctx.restore();
+
+        b.x += b.vx;
+        b.y += b.vy;
+        b.angle += b.rotSpeed;
+
+        if (b.alpha <= 0) oilBlocks.splice(i, 1);
+      }
+
+      for (let j = organicFlows.length - 1; j >= 0; j--) {
+        const flow = organicFlows[j];
+
+        if (flow.fadeIn) {
+          flow.alpha += 0.06;
+          if (flow.alpha >= flow.targetAlpha) flow.fadeIn = false;
+        } else {
+          flow.alpha -= (flow.decay || 0.008);
+        }
+
+        ctx.save();
+        ctx.shadowColor = `rgb(${flow.color.r}, ${flow.color.g}, ${flow.color.b})`;
+        ctx.shadowBlur = 18;
+
+        if (flow.type === 'ripple') {
+          ctx.beginPath();
+          ctx.arc(flow.x, flow.y, flow.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${flow.color.r}, ${flow.color.g}, ${flow.color.b}, ${flow.alpha * 0.6})`;
+          ctx.lineWidth = flow.lineWidth;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(flow.x, flow.y, flow.radius * 0.6, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${flow.color.r}, ${flow.color.g}, ${flow.color.b}, ${flow.alpha * 0.3})`;
+          ctx.lineWidth = flow.lineWidth * 0.6;
+          ctx.stroke();
+
+          flow.radius += flow.speed;
+          if (flow.radius >= flow.maxRadius) flow.fadeIn = false;
+        } else if (flow.type === 'river') {
+          if (flow.points.length > 2) {
+            ctx.beginPath();
+            ctx.moveTo(flow.points[0].x, flow.points[0].y);
+            for (let p = 1; p < flow.points.length - 1; p++) {
+              const xc = (flow.points[p].x + flow.points[p + 1].x) / 2;
+              const yc = (flow.points[p].y + flow.points[p + 1].y) / 2;
+              ctx.quadraticCurveTo(flow.points[p].x, flow.points[p].y, xc, yc);
+            }
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = `rgba(${flow.color.r}, ${flow.color.g}, ${flow.color.b}, ${flow.alpha * 0.5})`;
+            ctx.lineWidth = flow.lineWidth;
+            ctx.stroke();
+
+            ctx.strokeStyle = `rgba(${Math.min(255, flow.color.r + 40)}, ${Math.min(255, flow.color.g + 40)}, ${Math.min(255, flow.color.b + 40)}, ${flow.alpha * 0.8})`;
+            ctx.lineWidth = flow.lineWidth * 0.35;
+            ctx.stroke();
+          }
+        } else if (flow.type === 'lightning') {
+          ctx.beginPath();
+          flow.segments.forEach(seg => {
+            ctx.moveTo(seg.x1, seg.y1);
+            ctx.lineTo(seg.x2, seg.y2);
+          });
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = `rgba(${flow.color.r}, ${flow.color.g}, ${flow.color.b}, ${flow.alpha * 0.7})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.strokeStyle = `rgba(255, 255, 255, ${flow.alpha * 0.5})`;
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        } else if (flow.type === 'wisp') {
+          ctx.translate(flow.x, flow.y);
+          const wispGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, flow.rx);
+          wispGrad.addColorStop(0, `rgba(${flow.color.r}, ${flow.color.g}, ${flow.color.b}, ${flow.alpha * 0.45})`);
+          wispGrad.addColorStop(1, `rgba(${flow.color.r}, ${flow.color.g}, ${flow.color.b}, 0)`);
+          ctx.fillStyle = wispGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, flow.rx, flow.ry, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          flow.x += flow.vx;
+          flow.y += flow.vy;
+        }
+
+        ctx.restore();
+
+        if (flow.alpha <= 0) {
+          organicFlows.splice(j, 1);
+        }
+      }
+
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    const pressedKeys = new Set();
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const key = e.key.toLowerCase();
+      if (keyToMidi[key] !== undefined && !pressedKeys.has(key)) {
+        pressedKeys.add(key);
+        const midiWithOctave = keyToMidi[key] + parseInt(octaveSelect.value);
+        noteOn(midiWithOctave, `鍵盤 [${key.toUpperCase()}]`, 110);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (keyToMidi[key] !== undefined) {
+        pressedKeys.delete(key);
+        const midiWithOctave = keyToMidi[key] + parseInt(octaveSelect.value);
+        noteOff(midiWithOctave);
+      }
+    });
+
+    async function tryInitMIDI() {
+      if (!navigator.requestMIDIAccess) {
+        statusText.textContent = "瀏覽器不支援 Web MIDI API";
+        return;
+      }
+      try {
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        updateMidiDeviceList();
+        midiAccess.onstatechange = () => updateMidiDeviceList();
+      } catch (err) {
+        statusText.textContent = "MIDI 權限受限 (需 allow='midi')";
+        midiSelect.innerHTML = '<option value="">MIDI 存取受限</option>';
+      }
+    }
+
+    function updateMidiDeviceList() {
+      if (!midiAccess) return;
+      midiSelect.innerHTML = '';
+      const inputs = Array.from(midiAccess.inputs.values());
+
+      if (inputs.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = "";
+        opt.textContent = "未偵測到 MIDI 裝置";
+        midiSelect.appendChild(opt);
+        statusDot.classList.remove('connected');
+        statusText.textContent = "請連線 USB MIDI 電子琴";
+        bindMidiListeners();
+        return;
+      }
+
+      const allOpt = document.createElement('option');
+      allOpt.value = "ALL";
+      allOpt.textContent = `所有已連接裝置 (${inputs.length} 台)`;
+      midiSelect.appendChild(allOpt);
+
+      inputs.forEach(input => {
+        const opt = document.createElement('option');
+        opt.value = input.id;
+        opt.textContent = input.name || `MIDI 裝置 (${input.id})`;
+        midiSelect.appendChild(opt);
+      });
+
+      selectedMidiId = 'ALL';
+      midiSelect.value = 'ALL';
+      bindMidiListeners();
+    }
+
+    function bindMidiListeners() {
+      if (!midiAccess) return;
+      const inputs = midiAccess.inputs.values();
+      let activeCount = 0;
+
+      for (let input of inputs) {
+        if (selectedMidiId === 'ALL' || input.id === selectedMidiId) {
+          input.onmidimessage = handleMIDIMessage;
+          activeCount++;
+        } else {
+          input.onmidimessage = null;
+        }
+      }
+      if (activeCount > 0) {
+        statusDot.classList.add('connected');
+        statusText.textContent = `MIDI 已就緒 (${activeCount} 台裝置)`;
+      }
+    }
+
+    function handleMIDIMessage(e) {
+      const [status, note, velocity] = e.data;
+      const command = status >> 4;
+      const deviceName = e.target ? e.target.name : 'USB MIDI';
+
+      if (command === 9 && velocity > 0) {
+        noteOn(note, deviceName, velocity);
+      } else if (command === 8 || (command === 9 && velocity === 0)) {
+        noteOff(note);
+      }
+    }
+
+    midiSelect.addEventListener('change', (e) => {
+      selectedMidiId = e.target.value;
+      bindMidiListeners();
+    });
+
+    function renderKeyboard() {
+      pianoContainer.innerHTML = '';
+      const range = keyRangeSelect.value;
+      let startMidi = 60, endMidi = 84;
+
+      if (range === '25') { startMidi = 60; endMidi = 84; }
+      else if (range === '37') { startMidi = 53; endMidi = 89; }
+      else if (range === '49') { startMidi = 48; endMidi = 96; }
+      else if (range === '61') { startMidi = 36; endMidi = 96; }
+      else if (range === '88') { startMidi = 21; endMidi = 108; }
+
+      const midiToKeyLabel = {};
+      const currentOctShift = parseInt(octaveSelect.value);
+      for (let k in keyToMidi) {
+        midiToKeyLabel[keyToMidi[k] + currentOctShift] = k.toUpperCase();
+      }
+
+      for (let i = startMidi; i <= endMidi; i++) {
+        const isBlack = [1, 3, 6, 8, 10].includes(i % 12);
+        const key = document.createElement('div');
+        key.className = `key ${isBlack ? 'black' : 'white'}`;
+        key.dataset.midi = i;
+
+        const colorObj = noteColorMap[i % 12];
+        const keyLabel = midiToKeyLabel[i] ? `<div class="key-label">${midiToKeyLabel[i]}</div>` : '';
+        const noteLabel = `<div class="note-label">${colorObj.name}</div>`;
+        key.innerHTML = `${keyLabel}${noteLabel}`;
+
+        key.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          noteOn(i, 'Click/Touch', 110);
+        });
+        key.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          noteOff(i);
+        });
+        key.addEventListener('pointerleave', (e) => {
+          e.preventDefault();
+          noteOff(i);
+        });
+
+        pianoContainer.appendChild(key);
+      }
+    }
+
+    keyRangeSelect.addEventListener('change', renderKeyboard);
+    octaveSelect.addEventListener('change', renderKeyboard);
+
+    renderKeyboard();
+  </script>
+</body>
+</html>
